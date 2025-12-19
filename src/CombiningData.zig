@@ -6,25 +6,25 @@ s2: []u8 = undefined,
 const CombiningData = @This();
 
 pub fn init(allocator: mem.Allocator) !CombiningData {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("ccc");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var input: Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var decompress: compress.flate.Decompress = .init(&input, .raw, &decomp_buffer);
+    const reader = &decompress.reader;
 
     const endian = builtin.cpu.arch.endian();
 
     var cbdata = CombiningData{};
 
-    const stage_1_len: u16 = try reader.readInt(u16, endian);
+    const stage_1_len: u16 = try reader.takeInt(u16, endian);
     cbdata.s1 = try allocator.alloc(u16, stage_1_len);
     errdefer allocator.free(cbdata.s1);
-    for (0..stage_1_len) |i| cbdata.s1[i] = try reader.readInt(u16, endian);
+    for (0..stage_1_len) |i| cbdata.s1[i] = try reader.takeInt(u16, endian);
 
-    const stage_2_len: u16 = try reader.readInt(u16, endian);
+    const stage_2_len: u16 = try reader.takeInt(u16, endian);
     cbdata.s2 = try allocator.alloc(u8, stage_2_len);
     errdefer allocator.free(cbdata.s2);
-    _ = try reader.readAll(cbdata.s2);
+    try reader.readSliceAll(cbdata.s2);
 
     return cbdata;
 }
@@ -47,4 +47,5 @@ pub fn isStarter(cbdata: CombiningData, cp: u21) bool {
 const std = @import("std");
 const builtin = @import("builtin");
 const compress = std.compress;
+const Io = std.Io;
 const mem = std.mem;

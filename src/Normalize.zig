@@ -305,8 +305,8 @@ pub fn nfkd(self: Normalize, allocator: Allocator, str: []const u8) Allocator.Er
 }
 
 pub fn nfxdCodePoints(self: Normalize, allocator: Allocator, str: []const u8, form: Form) Allocator.Error![]u21 {
-    var dcp_list = std.ArrayList(u21).init(allocator);
-    defer dcp_list.deinit();
+    var dcp_list: std.ArrayList(u21) = .empty;
+    defer dcp_list.deinit(allocator);
 
     var cp_iter = CodePointIterator{ .bytes = str };
     var dc_buf: [18]u21 = undefined;
@@ -314,15 +314,15 @@ pub fn nfxdCodePoints(self: Normalize, allocator: Allocator, str: []const u8, fo
     while (cp_iter.next()) |cp| {
         const dc = self.decompose(cp.code, form, &dc_buf);
         if (dc.form == .same) {
-            try dcp_list.append(cp.code);
+            try dcp_list.append(allocator, cp.code);
         } else {
-            try dcp_list.appendSlice(dc.cps);
+            try dcp_list.appendSlice(allocator, dc.cps);
         }
     }
 
     self.canonicalSort(dcp_list.items);
 
-    return try dcp_list.toOwnedSlice();
+    return try dcp_list.toOwnedSlice(allocator);
 }
 
 fn nfxd(self: Normalize, allocator: Allocator, str: []const u8, form: Form) Allocator.Error!Result {
@@ -332,16 +332,16 @@ fn nfxd(self: Normalize, allocator: Allocator, str: []const u8, form: Form) Allo
     const dcps = try self.nfxdCodePoints(allocator, str, form);
     defer allocator.free(dcps);
 
-    var dstr_list = std.ArrayList(u8).init(allocator);
-    defer dstr_list.deinit();
+    var dstr_list: std.ArrayList(u8) = .empty;
+    defer dstr_list.deinit(allocator);
     var buf: [4]u8 = undefined;
 
     for (dcps) |dcp| {
         const len = unicode.utf8Encode(dcp, &buf) catch unreachable;
-        try dstr_list.appendSlice(buf[0..len]);
+        try dstr_list.appendSlice(allocator, buf[0..len]);
     }
 
-    return Result{ .allocated = true, .slice = try dstr_list.toOwnedSlice() };
+    return Result{ .allocated = true, .slice = try dstr_list.toOwnedSlice(allocator) };
 }
 
 test "nfd ASCII / no-alloc" {
@@ -393,8 +393,8 @@ pub fn nfdCodePoints(
     allocator: Allocator,
     cps: []const u21,
 ) Allocator.Error![]u21 {
-    var dcp_list = std.ArrayList(u21).init(allocator);
-    defer dcp_list.deinit();
+    var dcp_list: std.ArrayList(u21) = .empty;
+    defer dcp_list.deinit(allocator);
 
     var dc_buf: [18]u21 = undefined;
 
@@ -402,15 +402,15 @@ pub fn nfdCodePoints(
         const dc = self.decompose(cp, .nfd, &dc_buf);
 
         if (dc.form == .same) {
-            try dcp_list.append(cp);
+            try dcp_list.append(allocator, cp);
         } else {
-            try dcp_list.appendSlice(dc.cps);
+            try dcp_list.appendSlice(allocator, dc.cps);
         }
     }
 
     self.canonicalSort(dcp_list.items);
 
-    return try dcp_list.toOwnedSlice();
+    return try dcp_list.toOwnedSlice(allocator);
 }
 
 pub fn nfkdCodePoints(
@@ -418,8 +418,8 @@ pub fn nfkdCodePoints(
     allocator: Allocator,
     cps: []const u21,
 ) Allocator.Error![]u21 {
-    var dcp_list = std.ArrayList(u21).init(allocator);
-    defer dcp_list.deinit();
+    var dcp_list: std.ArrayList(u21) = .empty;
+    defer dcp_list.deinit(allocator);
 
     var dc_buf: [18]u21 = undefined;
 
@@ -427,15 +427,15 @@ pub fn nfkdCodePoints(
         const dc = self.decompose(cp, .nfkd, &dc_buf);
 
         if (dc.form == .same) {
-            try dcp_list.append(cp);
+            try dcp_list.append(allocator, cp);
         } else {
-            try dcp_list.appendSlice(dc.cps);
+            try dcp_list.appendSlice(allocator, dc.cps);
         }
     }
 
     self.canonicalSort(dcp_list.items);
 
-    return try dcp_list.toOwnedSlice();
+    return try dcp_list.toOwnedSlice(allocator);
 }
 
 // Composition (NFC, NFKC)
@@ -560,17 +560,17 @@ fn nfxc(self: Normalize, allocator: Allocator, str: []const u8, form: Form) Allo
         // If we have no deletions. the code point sequence
         // has been fully composed.
         if (deleted == 0) {
-            var cstr_list = std.ArrayList(u8).init(allocator);
-            defer cstr_list.deinit();
+            var cstr_list: std.ArrayList(u8) = .empty;
+            defer cstr_list.deinit(allocator);
             var buf: [4]u8 = undefined;
 
             for (dcps) |cp| {
                 if (cp == tombstone) continue; // "Delete"
                 const len = unicode.utf8Encode(cp, &buf) catch unreachable;
-                try cstr_list.appendSlice(buf[0..len]);
+                try cstr_list.appendSlice(allocator, buf[0..len]);
             }
 
-            return Result{ .allocated = true, .slice = try cstr_list.toOwnedSlice() };
+            return Result{ .allocated = true, .slice = try cstr_list.toOwnedSlice(allocator) };
         }
     }
 }
@@ -630,17 +630,18 @@ pub fn isLatin1Only(str: []const u8) bool {
     const Vec = @Vector(vec_len, u21);
 
     outer: while (true) {
-        var v1: Vec = undefined;
+        var arr: [vec_len]u21 = undefined;
         const saved_cp_i = cp_iter.i;
 
         for (0..vec_len) |i| {
             if (cp_iter.next()) |cp| {
-                v1[i] = cp.code;
+                arr[i] = cp.code;
             } else {
                 cp_iter.i = saved_cp_i;
                 break :outer;
             }
         }
+        const v1: Vec = arr;
         const v2: Vec = @splat(256);
         if (@reduce(.Or, v1 > v2)) return false;
     }

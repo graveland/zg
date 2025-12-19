@@ -3,22 +3,21 @@ const dbg_print = false;
 test "Unicode normalization tests" {
     var arena = heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     const n = try Normalize.init(allocator);
     defer n.deinit(allocator);
 
-    var file = try fs.cwd().openFile("data/unicode/NormalizationTest.txt", .{});
+    const file = try fs.cwd().openFile("data/unicode/NormalizationTest.txt", .{});
     defer file.close();
-    var buf_reader = io.bufferedReader(file.reader());
-    var input_stream = buf_reader.reader();
 
-    var buf: [4096]u8 = undefined;
+    const content = try readFileContents(allocator, file);
+    defer allocator.free(content);
+
     var cp_buf: [4]u8 = undefined;
+    var line_iter = LineIterator.init(content);
 
-    var line_iter: IterRead = .{ .read = &input_stream };
-
-    while (try line_iter.next(&buf)) |line| {
+    while (line_iter.next()) |line| {
         // Iterate over fields.
         var fields = mem.splitScalar(u8, line, ';');
         var field_index: usize = 0;
@@ -27,28 +26,28 @@ test "Unicode normalization tests" {
 
         while (fields.next()) |field| : (field_index += 1) {
             if (field_index == 0) {
-                var i_buf = std.ArrayList(u8).init(allocator);
-                defer i_buf.deinit();
+                var i_buf: std.ArrayList(u8) = .empty;
+                defer i_buf.deinit(allocator);
 
                 var i_fields = mem.splitScalar(u8, field, ' ');
                 while (i_fields.next()) |s| {
                     const icp = try fmt.parseInt(u21, s, 16);
                     const len = try unicode.utf8Encode(icp, &cp_buf);
-                    try i_buf.appendSlice(cp_buf[0..len]);
+                    try i_buf.appendSlice(allocator, cp_buf[0..len]);
                 }
 
-                input = try i_buf.toOwnedSlice();
+                input = try i_buf.toOwnedSlice(allocator);
             } else if (field_index == 1) {
                 if (dbg_print) debug.print("\n*** {s} ***\n", .{line});
                 // NFC, time to test.
-                var w_buf = std.ArrayList(u8).init(allocator);
-                defer w_buf.deinit();
+                var w_buf: std.ArrayList(u8) = .empty;
+                defer w_buf.deinit(allocator);
 
                 var w_fields = mem.splitScalar(u8, field, ' ');
                 while (w_fields.next()) |s| {
                     const wcp = try fmt.parseInt(u21, s, 16);
                     const len = try unicode.utf8Encode(wcp, &cp_buf);
-                    try w_buf.appendSlice(cp_buf[0..len]);
+                    try w_buf.appendSlice(allocator, cp_buf[0..len]);
                 }
 
                 const want = w_buf.items;
@@ -58,14 +57,14 @@ test "Unicode normalization tests" {
                 try testing.expectEqualStrings(want, got.slice);
             } else if (field_index == 2) {
                 // NFD, time to test.
-                var w_buf = std.ArrayList(u8).init(allocator);
-                defer w_buf.deinit();
+                var w_buf: std.ArrayList(u8) = .empty;
+                defer w_buf.deinit(allocator);
 
                 var w_fields = mem.splitScalar(u8, field, ' ');
                 while (w_fields.next()) |s| {
                     const wcp = try fmt.parseInt(u21, s, 16);
                     const len = try unicode.utf8Encode(wcp, &cp_buf);
-                    try w_buf.appendSlice(cp_buf[0..len]);
+                    try w_buf.appendSlice(allocator, cp_buf[0..len]);
                 }
 
                 const want = w_buf.items;
@@ -75,14 +74,14 @@ test "Unicode normalization tests" {
                 try testing.expectEqualStrings(want, got.slice);
             } else if (field_index == 3) {
                 // NFKC, time to test.
-                var w_buf = std.ArrayList(u8).init(allocator);
-                defer w_buf.deinit();
+                var w_buf: std.ArrayList(u8) = .empty;
+                defer w_buf.deinit(allocator);
 
                 var w_fields = mem.splitScalar(u8, field, ' ');
                 while (w_fields.next()) |s| {
                     const wcp = try fmt.parseInt(u21, s, 16);
                     const len = try unicode.utf8Encode(wcp, &cp_buf);
-                    try w_buf.appendSlice(cp_buf[0..len]);
+                    try w_buf.appendSlice(allocator, cp_buf[0..len]);
                 }
 
                 const want = w_buf.items;
@@ -92,14 +91,14 @@ test "Unicode normalization tests" {
                 try testing.expectEqualStrings(want, got.slice);
             } else if (field_index == 4) {
                 // NFKD, time to test.
-                var w_buf = std.ArrayList(u8).init(allocator);
-                defer w_buf.deinit();
+                var w_buf: std.ArrayList(u8) = .empty;
+                defer w_buf.deinit(allocator);
 
                 var w_fields = mem.splitScalar(u8, field, ' ');
                 while (w_fields.next()) |s| {
                     const wcp = try fmt.parseInt(u21, s, 16);
                     const len = try unicode.utf8Encode(wcp, &cp_buf);
-                    try w_buf.appendSlice(cp_buf[0..len]);
+                    try w_buf.appendSlice(allocator, cp_buf[0..len]);
                 }
 
                 const want = w_buf.items;
@@ -116,29 +115,29 @@ test "Unicode normalization tests" {
 
 test "Segmentation GraphemeIterator" {
     const allocator = std.testing.allocator;
-    var file = try std.fs.cwd().openFile("data/unicode/auxiliary/GraphemeBreakTest.txt", .{});
+    const file = try std.fs.cwd().openFile("data/unicode/auxiliary/GraphemeBreakTest.txt", .{});
     defer file.close();
-    var buf_reader = std.io.bufferedReader(file.reader());
-    var input_stream = buf_reader.reader();
+
+    const content = try readFileContents(allocator, file);
+    defer allocator.free(content);
 
     const graph = try Graphemes.init(allocator);
     defer graph.deinit(allocator);
 
-    var buf: [4096]u8 = undefined;
-    var line_iter: IterRead = .{ .read = &input_stream };
+    var line_iter = LineIterator.init(content);
 
-    while (try line_iter.next(&buf)) |raw| {
+    while (line_iter.next()) |raw| {
         // Clean up.
         var line = std.mem.trimLeft(u8, raw, "÷ ");
         if (std.mem.indexOf(u8, line, " ÷\t")) |final| {
             line = line[0..final];
         }
         // Iterate over fields.
-        var want = std.ArrayList(Grapheme).init(allocator);
-        defer want.deinit();
+        var want: std.ArrayList(Grapheme) = .empty;
+        defer want.deinit(allocator);
 
-        var all_bytes = std.ArrayList(u8).init(allocator);
-        defer all_bytes.deinit();
+        var all_bytes: std.ArrayList(u8) = .empty;
+        defer all_bytes.deinit(allocator);
 
         var graphemes = std.mem.splitSequence(u8, line, " ÷ ");
         var bytes_index: uoffset = 0;
@@ -153,12 +152,12 @@ test "Segmentation GraphemeIterator" {
                 if (std.mem.eql(u8, code_point, "×")) continue;
                 const cp: u21 = try std.fmt.parseInt(u21, code_point, 16);
                 const len = try unicode.utf8Encode(cp, &cp_buf);
-                try all_bytes.appendSlice(cp_buf[0..len]);
+                try all_bytes.appendSlice(allocator, cp_buf[0..len]);
                 cp_index += len;
                 gc_len += len;
             }
 
-            try want.append(Grapheme{ .len = gc_len, .offset = bytes_index });
+            try want.append(allocator, Grapheme{ .len = gc_len, .offset = bytes_index });
             bytes_index += cp_index;
         }
 
@@ -255,29 +254,29 @@ test "Segmentation GraphemeIterator" {
 
 test "Segmentation Word Iterator" {
     const allocator = std.testing.allocator;
-    var file = try std.fs.cwd().openFile("data/unicode/auxiliary/WordBreakTest.txt", .{});
+    const file = try std.fs.cwd().openFile("data/unicode/auxiliary/WordBreakTest.txt", .{});
     defer file.close();
-    var buf_reader = std.io.bufferedReader(file.reader());
-    var input_stream = buf_reader.reader();
+
+    const content = try readFileContents(allocator, file);
+    defer allocator.free(content);
 
     const wb = try Words.init(allocator);
     defer wb.deinit(allocator);
 
-    var buf: [4096]u8 = undefined;
-    var line_iter: IterRead = .{ .read = &input_stream };
+    var line_iter = LineIterator.init(content);
 
-    while (try line_iter.next(&buf)) |raw| {
+    while (line_iter.next()) |raw| {
         // Clean up.
         var line = std.mem.trimLeft(u8, raw, "÷ ");
         if (std.mem.indexOf(u8, line, " ÷\t")) |final| {
             line = line[0..final];
         }
         // Iterate over fields.
-        var want = std.ArrayList(Word).init(allocator);
-        defer want.deinit();
+        var want: std.ArrayList(Word) = .empty;
+        defer want.deinit(allocator);
 
-        var all_bytes = std.ArrayList(u8).init(allocator);
-        defer all_bytes.deinit();
+        var all_bytes: std.ArrayList(u8) = .empty;
+        defer all_bytes.deinit(allocator);
 
         var words = std.mem.splitSequence(u8, line, " ÷ ");
         var bytes_index: uoffset = 0;
@@ -292,12 +291,12 @@ test "Segmentation Word Iterator" {
                 if (std.mem.eql(u8, code_point, "×")) continue;
                 const cp: u21 = try std.fmt.parseInt(u21, code_point, 16);
                 const len = try unicode.utf8Encode(cp, &cp_buf);
-                try all_bytes.appendSlice(cp_buf[0..len]);
+                try all_bytes.appendSlice(allocator, cp_buf[0..len]);
                 cp_index += len;
                 gc_len += len;
             }
 
-            try want.append(Word{ .len = gc_len, .offset = bytes_index });
+            try want.append(allocator, Word{ .len = gc_len, .offset = bytes_index });
             bytes_index += cp_index;
         }
         const this_str = all_bytes.items;
@@ -442,32 +441,70 @@ test "Segmentation Word Iterator" {
     }
 }
 
-const IterRead = struct {
-    read: *Reader,
+fn readFileContents(allocator: std.mem.Allocator, file: fs.File) ![]u8 {
+    const stat = try file.stat();
+    const size = stat.size;
+    const content = try allocator.alloc(u8, size);
+    errdefer allocator.free(content);
+
+    var total_read: usize = 0;
+    while (total_read < size) {
+        const bytes_read = try file.read(content[total_read..]);
+        if (bytes_read == 0) break;
+        total_read += bytes_read;
+    }
+
+    return content[0..total_read];
+}
+
+const LineIterator = struct {
+    content: []const u8,
+    pos: usize = 0,
     line: usize = 0,
 
-    pub fn next(iter: *IterRead, buf: []u8) !?[]const u8 {
-        defer iter.line += 1;
-        const maybe_line = try iter.read.readUntilDelimiterOrEof(buf, '#');
-        if (maybe_line) |this_line| {
-            try iter.read.skipUntilDelimiterOrEof('\n');
-            if (this_line.len == 0 or this_line[0] == '@') {
-                // comment, next line
-                return iter.next(buf);
-            } else {
-                return this_line;
+    fn init(content: []const u8) LineIterator {
+        return .{ .content = content };
+    }
+
+    fn next(self: *LineIterator) ?[]const u8 {
+        while (self.pos < self.content.len) {
+            const start = self.pos;
+            // Find the # comment delimiter
+            var line_end = self.pos;
+            while (line_end < self.content.len and self.content[line_end] != '\n' and self.content[line_end] != '#') {
+                line_end += 1;
             }
-        } else {
-            return null;
+
+            // Skip to end of line
+            while (self.pos < self.content.len and self.content[self.pos] != '\n') {
+                self.pos += 1;
+            }
+            // Skip the newline
+            if (self.pos < self.content.len) {
+                self.pos += 1;
+            }
+            self.line += 1;
+
+            // Get the line content (up to #, without trailing \r)
+            var line = self.content[start..line_end];
+            if (line.len > 0 and line[line.len - 1] == '\r') {
+                line = line[0 .. line.len - 1];
+            }
+
+            // Skip empty lines and lines starting with @ (but don't trim - test code handles that)
+            const trimmed = std.mem.trimRight(u8, line, " \t\r");
+            if (trimmed.len == 0) continue;
+            if (trimmed[0] == '@') continue;
+
+            return line;
         }
+        return null;
     }
 };
 
 const std = @import("std");
 const fmt = std.fmt;
 const fs = std.fs;
-const io = std.io;
-const Reader = io.BufferedReader(4096, fs.File.Reader).Reader;
 const heap = std.heap;
 const mem = std.mem;
 const debug = std.debug;

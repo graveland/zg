@@ -31,15 +31,11 @@ pub fn main() !void {
     var flat_map = std.AutoHashMap(u21, i4).init(allocator);
     defer flat_map.deinit();
 
-    var line_buf: [4096]u8 = undefined;
-
     // Process DerivedEastAsianWidth.txt
-    var deaw_file = try std.fs.cwd().openFile("data/unicode/extracted/DerivedEastAsianWidth.txt", .{});
-    defer deaw_file.close();
-    var deaw_buf = std.io.bufferedReader(deaw_file.reader());
-    const deaw_reader = deaw_buf.reader();
+    const deaw_data = try std.fs.cwd().readFileAlloc("data/unicode/extracted/DerivedEastAsianWidth.txt", allocator, .unlimited);
+    var deaw_lines = std.mem.splitScalar(u8, deaw_data, '\n');
 
-    while (try deaw_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+    while (deaw_lines.next()) |line| {
         if (line.len == 0) continue;
 
         // @missing ranges
@@ -91,12 +87,10 @@ pub fn main() !void {
     }
 
     // Process DerivedGeneralCategory.txt
-    var dgc_file = try std.fs.cwd().openFile("data/unicode/extracted/DerivedGeneralCategory.txt", .{});
-    defer dgc_file.close();
-    var dgc_buf = std.io.bufferedReader(dgc_file.reader());
-    const dgc_reader = dgc_buf.reader();
+    const dgc_data = try std.fs.cwd().readFileAlloc("data/unicode/extracted/DerivedGeneralCategory.txt", allocator, .unlimited);
+    var dgc_lines = std.mem.splitScalar(u8, dgc_data, '\n');
 
-    while (try dgc_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+    while (dgc_lines.next()) |line| {
         if (line.len == 0 or line[0] == '#') continue;
         const no_comment = if (std.mem.indexOfScalar(u8, line, '#')) |octo| line[0..octo] else line;
 
@@ -144,11 +138,11 @@ pub fn main() !void {
     var blocks_map = BlockMap.init(allocator);
     defer blocks_map.deinit();
 
-    var stage1 = std.ArrayList(u16).init(allocator);
-    defer stage1.deinit();
+    var stage1: std.ArrayList(u16) = .empty;
+    defer stage1.deinit(allocator);
 
-    var stage2 = std.ArrayList(i4).init(allocator);
-    defer stage2.deinit();
+    var stage2: std.ArrayList(i4) = .empty;
+    defer stage2.deinit(allocator);
 
     var block: Block = [_]i4{0} ** block_size;
     var block_len: u16 = 0;
@@ -215,10 +209,10 @@ pub fn main() !void {
         const gop = try blocks_map.getOrPut(block);
         if (!gop.found_existing) {
             gop.value_ptr.* = @intCast(stage2.items.len);
-            try stage2.appendSlice(&block);
+            try stage2.appendSlice(allocator, &block);
         }
 
-        try stage1.append(gop.value_ptr.*);
+        try stage1.append(allocator, gop.value_ptr.*);
         block_len = 0;
     }
 
@@ -227,18 +221,25 @@ pub fn main() !void {
     _ = args_iter.skip();
     const output_path = args_iter.next() orelse @panic("No output file arg!");
 
-    const compressor = std.compress.flate.deflate.compressor;
+    const flate = std.compress.flate;
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
-    var out_comp = try compressor(.raw, out_file.writer(), .{ .level = .best });
-    const writer = out_comp.writer();
+
+    // Buffer for file writer (needs capacity > 8 bytes per Compress.init assertion)
+    var file_buf: [4096]u8 = undefined;
+    var file_writer = out_file.writer(&file_buf);
+
+    // Buffer for deflate (needs at least max_window_len bytes)
+    var deflate_buf: [flate.max_window_len]u8 = undefined;
+    var compress = try flate.Compress.init(&file_writer.interface, &deflate_buf, .raw, .best);
 
     const endian = builtin.cpu.arch.endian();
-    try writer.writeInt(u16, @intCast(stage1.items.len), endian);
-    for (stage1.items) |i| try writer.writeInt(u16, i, endian);
+    try compress.writer.writeInt(u16, @intCast(stage1.items.len), endian);
+    for (stage1.items) |item| try compress.writer.writeInt(u16, item, endian);
 
-    try writer.writeInt(u16, @intCast(stage2.items.len), endian);
-    for (stage2.items) |i| try writer.writeInt(i8, i, endian);
+    try compress.writer.writeInt(u16, @intCast(stage2.items.len), endian);
+    for (stage2.items) |item| try compress.writer.writeInt(i8, item, endian);
 
-    try out_comp.flush();
+    try compress.writer.flush();
+    try file_writer.interface.flush();
 }

@@ -6,11 +6,11 @@ cps: []u21 = undefined,
 const CompatData = @This();
 
 pub fn init(allocator: mem.Allocator) !CompatData {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("compat");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var input: Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var decompress: compress.flate.Decompress = .init(&input, .raw, &decomp_buffer);
+    const reader = &decompress.reader;
 
     const endian = builtin.cpu.arch.endian();
     var cpdata = CompatData{
@@ -27,12 +27,12 @@ pub fn init(allocator: mem.Allocator) !CompatData {
     var total_len: usize = 0;
 
     while (true) {
-        const len: u8 = try reader.readInt(u8, endian);
+        const len: u8 = try reader.takeInt(u8, endian);
         if (len == 0) break;
-        const cp = try reader.readInt(u24, endian);
+        const cp = try reader.takeInt(u24, endian);
         const nk_s = cpdata.cps[total_len..][0 .. len - 1];
         for (0..len - 1) |i| {
-            nk_s[i] = @intCast(try reader.readInt(u24, endian));
+            nk_s[i] = @intCast(try reader.takeInt(u24, endian));
         }
         cpdata.nfkd[cp] = nk_s;
         total_len += len - 1;
@@ -56,5 +56,6 @@ pub fn toNfkd(cpdata: *const CompatData, cp: u21) []u21 {
 const std = @import("std");
 const builtin = @import("builtin");
 const compress = std.compress;
+const Io = std.Io;
 const mem = std.mem;
 const magic = @import("magic");

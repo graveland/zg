@@ -605,23 +605,22 @@ const SneakIterator = struct {
 };
 
 inline fn setupImpl(wb: *Words, allocator: Allocator) !void {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("wbp");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var input_reader: std.Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var decompress = compress.flate.Decompress.init(&input_reader, .raw, &decomp_buffer);
 
     const endian = builtin.cpu.arch.endian();
 
-    const stage_1_len: u16 = try reader.readInt(u16, endian);
+    const stage_1_len: u16 = try decompress.reader.takeInt(u16, endian);
     wb.s1 = try allocator.alloc(u16, stage_1_len);
     errdefer allocator.free(wb.s1);
-    for (0..stage_1_len) |i| wb.s1[i] = try reader.readInt(u16, endian);
+    for (0..stage_1_len) |i| wb.s1[i] = try decompress.reader.takeInt(u16, endian);
 
-    const stage_2_len: u16 = try reader.readInt(u16, endian);
+    const stage_2_len: u16 = try decompress.reader.takeInt(u16, endian);
     wb.s2 = try allocator.alloc(u5, stage_2_len);
     errdefer allocator.free(wb.s2);
-    for (0..stage_2_len) |i| wb.s2[i] = @intCast(try reader.readInt(u8, endian));
+    for (0..stage_2_len) |i| wb.s2[i] = @intCast(try decompress.reader.takeInt(u8, endian));
     var count_0: usize = 0;
     for (wb.s2) |nyb| {
         if (nyb == 0) count_0 += 1;

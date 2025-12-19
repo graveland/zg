@@ -16,28 +16,27 @@ pub fn init(allocator: Allocator) Allocator.Error!Graphemes {
 }
 
 pub fn setup(graphemes: *Graphemes, allocator: Allocator) Allocator.Error!void {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("gbp");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var input_reader: std.Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var decompress = compress.flate.Decompress.init(&input_reader, .raw, &decomp_buffer);
 
     const endian = builtin.cpu.arch.endian();
 
-    const s1_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const s1_len: u16 = decompress.reader.takeInt(u16, endian) catch unreachable;
     graphemes.s1 = try allocator.alloc(u16, s1_len);
     errdefer allocator.free(graphemes.s1);
-    for (0..s1_len) |i| graphemes.s1[i] = reader.readInt(u16, endian) catch unreachable;
+    for (0..s1_len) |i| graphemes.s1[i] = decompress.reader.takeInt(u16, endian) catch unreachable;
 
-    const s2_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const s2_len: u16 = decompress.reader.takeInt(u16, endian) catch unreachable;
     graphemes.s2 = try allocator.alloc(u16, s2_len);
     errdefer allocator.free(graphemes.s2);
-    for (0..s2_len) |i| graphemes.s2[i] = reader.readInt(u16, endian) catch unreachable;
+    for (0..s2_len) |i| graphemes.s2[i] = decompress.reader.takeInt(u16, endian) catch unreachable;
 
-    const s3_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const s3_len: u16 = decompress.reader.takeInt(u16, endian) catch unreachable;
     graphemes.s3 = try allocator.alloc(u8, s3_len);
     errdefer allocator.free(graphemes.s3);
-    _ = reader.readAll(graphemes.s3) catch unreachable;
+    decompress.reader.readSliceAll(graphemes.s3) catch unreachable;
 }
 
 pub fn deinit(graphemes: *const Graphemes, allocator: Allocator) void {

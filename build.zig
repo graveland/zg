@@ -49,6 +49,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_gbp_gen_exe = b.addRunArtifact(gbp_gen_exe);
+    run_gbp_gen_exe.setCwd(b.path("."));
     const gbp_gen_out = run_gbp_gen_exe.addOutputFileArg("gbp.bin.z");
 
     const wbp_gen_exe = b.addExecutable(.{
@@ -60,6 +61,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_wbp_gen_exe = b.addRunArtifact(wbp_gen_exe);
+    run_wbp_gen_exe.setCwd(b.path("."));
     const wbp_gen_out = run_wbp_gen_exe.addOutputFileArg("wbp.bin.z");
 
     const dwp_gen_exe = b.addExecutable(.{
@@ -72,6 +74,7 @@ pub fn build(b: *std.Build) void {
     });
     dwp_gen_exe.root_module.addOptions("options", dwp_options);
     const run_dwp_gen_exe = b.addRunArtifact(dwp_gen_exe);
+    run_dwp_gen_exe.setCwd(b.path("."));
     const dwp_gen_out = run_dwp_gen_exe.addOutputFileArg("dwp.bin.z");
 
     // Normalization properties
@@ -84,6 +87,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_canon_gen_exe = b.addRunArtifact(canon_gen_exe);
+    run_canon_gen_exe.setCwd(b.path("."));
     const canon_gen_out = run_canon_gen_exe.addOutputFileArg("canon.bin.z");
 
     const compat_gen_exe = b.addExecutable(.{
@@ -95,6 +99,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_compat_gen_exe = b.addRunArtifact(compat_gen_exe);
+    run_compat_gen_exe.setCwd(b.path("."));
     const compat_gen_out = run_compat_gen_exe.addOutputFileArg("compat.bin.z");
 
     const hangul_gen_exe = b.addExecutable(.{
@@ -106,6 +111,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_hangul_gen_exe = b.addRunArtifact(hangul_gen_exe);
+    run_hangul_gen_exe.setCwd(b.path("."));
     const hangul_gen_out = run_hangul_gen_exe.addOutputFileArg("hangul.bin.z");
 
     const normp_gen_exe = b.addExecutable(.{
@@ -117,6 +123,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_normp_gen_exe = b.addRunArtifact(normp_gen_exe);
+    run_normp_gen_exe.setCwd(b.path("."));
     const normp_gen_out = run_normp_gen_exe.addOutputFileArg("normp.bin.z");
 
     const ccc_gen_exe = b.addExecutable(.{
@@ -128,6 +135,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_ccc_gen_exe = b.addRunArtifact(ccc_gen_exe);
+    run_ccc_gen_exe.setCwd(b.path("."));
     const ccc_gen_out = run_ccc_gen_exe.addOutputFileArg("ccc.bin.z");
 
     const gencat_gen_exe = b.addExecutable(.{
@@ -139,6 +147,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_gencat_gen_exe = b.addRunArtifact(gencat_gen_exe);
+    run_gencat_gen_exe.setCwd(b.path("."));
     const gencat_gen_out = run_gencat_gen_exe.addOutputFileArg("gencat.bin.z");
 
     const fold_gen_exe = b.addExecutable(.{
@@ -150,6 +159,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_fold_gen_exe = b.addRunArtifact(fold_gen_exe);
+    run_fold_gen_exe.setCwd(b.path("."));
     const fold_gen_out = run_fold_gen_exe.addOutputFileArg("fold.bin.z");
 
     // Numeric types
@@ -162,6 +172,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_num_gen_exe = b.addRunArtifact(num_gen_exe);
+    run_num_gen_exe.setCwd(b.path("."));
     const num_gen_out = run_num_gen_exe.addOutputFileArg("numeric.bin.z");
 
     // Letter case properties
@@ -174,6 +185,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_case_prop_gen_exe = b.addRunArtifact(case_prop_gen_exe);
+    run_case_prop_gen_exe.setCwd(b.path("."));
     const case_prop_gen_out = run_case_prop_gen_exe.addOutputFileArg("case_prop.bin.z");
 
     // Uppercase mappings
@@ -186,6 +198,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_upper_gen_exe = b.addRunArtifact(upper_gen_exe);
+    run_upper_gen_exe.setCwd(b.path("."));
     const upper_gen_out = run_upper_gen_exe.addOutputFileArg("upper.bin.z");
 
     // Lowercase mappings
@@ -198,6 +211,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_lower_gen_exe = b.addRunArtifact(lower_gen_exe);
+    run_lower_gen_exe.setCwd(b.path("."));
     const lower_gen_out = run_lower_gen_exe.addOutputFileArg("lower.bin.z");
 
     const scripts_gen_exe = b.addExecutable(.{
@@ -209,6 +223,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_scripts_gen_exe = b.addRunArtifact(scripts_gen_exe);
+    run_scripts_gen_exe.setCwd(b.path("."));
     const scripts_gen_out = run_scripts_gen_exe.addOutputFileArg("scripts.bin.z");
 
     const core_gen_exe = b.addExecutable(.{
@@ -220,6 +235,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_core_gen_exe = b.addRunArtifact(core_gen_exe);
+    run_core_gen_exe.setCwd(b.path("."));
     const core_gen_out = run_core_gen_exe.addOutputFileArg("core_props.bin.z");
 
     const props_gen_exe = b.addExecutable(.{
@@ -231,6 +247,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const run_props_gen_exe = b.addRunArtifact(props_gen_exe);
+    run_props_gen_exe.setCwd(b.path("."));
     const props_gen_out = run_props_gen_exe.addOutputFileArg("props.bin.z");
 
     // Modules we provide

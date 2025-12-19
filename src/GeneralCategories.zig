@@ -47,28 +47,27 @@ pub fn init(allocator: Allocator) Allocator.Error!GeneralCategories {
 }
 
 pub fn setup(gencat: *GeneralCategories, allocator: Allocator) Allocator.Error!void {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("gencat");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var input_reader: std.Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var decompress = compress.flate.Decompress.init(&input_reader, .raw, &decomp_buffer);
 
     const endian = builtin.cpu.arch.endian();
 
-    const s1_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const s1_len: u16 = decompress.reader.takeInt(u16, endian) catch unreachable;
     gencat.s1 = try allocator.alloc(u16, s1_len);
     errdefer allocator.free(gencat.s1);
-    for (0..s1_len) |i| gencat.s1[i] = reader.readInt(u16, endian) catch unreachable;
+    for (0..s1_len) |i| gencat.s1[i] = decompress.reader.takeInt(u16, endian) catch unreachable;
 
-    const s2_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const s2_len: u16 = decompress.reader.takeInt(u16, endian) catch unreachable;
     gencat.s2 = try allocator.alloc(u5, s2_len);
     errdefer allocator.free(gencat.s2);
-    for (0..s2_len) |i| gencat.s2[i] = @intCast(reader.readInt(u8, endian) catch unreachable);
+    for (0..s2_len) |i| gencat.s2[i] = @intCast(decompress.reader.takeInt(u8, endian) catch unreachable);
 
-    const s3_len: u16 = reader.readInt(u8, endian) catch unreachable;
+    const s3_len: u16 = decompress.reader.takeInt(u8, endian) catch unreachable;
     gencat.s3 = try allocator.alloc(u5, s3_len);
     errdefer allocator.free(gencat.s3);
-    for (0..s3_len) |i| gencat.s3[i] = @intCast(reader.readInt(u8, endian) catch unreachable);
+    for (0..s3_len) |i| gencat.s3[i] = @intCast(decompress.reader.takeInt(u8, endian) catch unreachable);
 }
 
 pub fn deinit(gencat: *const GeneralCategories, allocator: mem.Allocator) void {

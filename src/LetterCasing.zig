@@ -22,7 +22,6 @@ pub fn setup(case: *LetterCasing, allocator: Allocator) Allocator.Error!void {
 }
 
 inline fn setupInner(self: *LetterCasing, allocator: mem.Allocator) !void {
-    const decompressor = compress.flate.inflate.decompressor;
     const endian = builtin.cpu.arch.endian();
 
     self.case_map = try allocator.alloc([2]u21, 0x110000);
@@ -33,47 +32,46 @@ inline fn setupInner(self: *LetterCasing, allocator: mem.Allocator) !void {
         self.case_map[cp] = .{ cp, cp };
     }
 
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+
     // Uppercase
     const upper_bytes = @embedFile("upper");
-    var upper_fbs = std.io.fixedBufferStream(upper_bytes);
-    var upper_decomp = decompressor(.raw, upper_fbs.reader());
-    var upper_reader = upper_decomp.reader();
+    var upper_input: std.Io.Reader = .fixed(upper_bytes);
+    var upper_decomp = compress.flate.Decompress.init(&upper_input, .raw, &decomp_buffer);
 
     while (true) {
-        const cp = try upper_reader.readInt(i24, endian);
+        const cp = try upper_decomp.reader.takeInt(i24, endian);
         if (cp == 0) break;
-        const diff = try upper_reader.readInt(i24, endian);
+        const diff = try upper_decomp.reader.takeInt(i24, endian);
         self.case_map[@intCast(cp)][0] = @intCast(cp + diff);
     }
 
     // Lowercase
     const lower_bytes = @embedFile("lower");
-    var lower_fbs = std.io.fixedBufferStream(lower_bytes);
-    var lower_decomp = decompressor(.raw, lower_fbs.reader());
-    var lower_reader = lower_decomp.reader();
+    var lower_input: std.Io.Reader = .fixed(lower_bytes);
+    var lower_decomp = compress.flate.Decompress.init(&lower_input, .raw, &decomp_buffer);
 
     while (true) {
-        const cp = try lower_reader.readInt(i24, endian);
+        const cp = try lower_decomp.reader.takeInt(i24, endian);
         if (cp == 0) break;
-        const diff = try lower_reader.readInt(i24, endian);
+        const diff = try lower_decomp.reader.takeInt(i24, endian);
         self.case_map[@intCast(cp)][1] = @intCast(cp + diff);
     }
 
     // Case properties
     const cp_bytes = @embedFile("case_prop");
-    var cp_fbs = std.io.fixedBufferStream(cp_bytes);
-    var cp_decomp = decompressor(.raw, cp_fbs.reader());
-    var cp_reader = cp_decomp.reader();
+    var cp_input: std.Io.Reader = .fixed(cp_bytes);
+    var cp_decomp = compress.flate.Decompress.init(&cp_input, .raw, &decomp_buffer);
 
-    const stage_1_len: u16 = try cp_reader.readInt(u16, endian);
+    const stage_1_len: u16 = try cp_decomp.reader.takeInt(u16, endian);
     self.prop_s1 = try allocator.alloc(u16, stage_1_len);
     errdefer allocator.free(self.prop_s1);
-    for (0..stage_1_len) |i| self.prop_s1[i] = try cp_reader.readInt(u16, endian);
+    for (0..stage_1_len) |i| self.prop_s1[i] = try cp_decomp.reader.takeInt(u16, endian);
 
-    const stage_2_len: u16 = try cp_reader.readInt(u16, endian);
+    const stage_2_len: u16 = try cp_decomp.reader.takeInt(u16, endian);
     self.prop_s2 = try allocator.alloc(u8, stage_2_len);
     errdefer allocator.free(self.prop_s2);
-    _ = try cp_reader.readAll(self.prop_s2);
+    try cp_decomp.reader.readSliceAll(self.prop_s2);
 }
 
 pub fn deinit(self: *const LetterCasing, allocator: mem.Allocator) void {
@@ -122,18 +120,18 @@ pub fn toUpperStr(
     allocator: mem.Allocator,
     str: []const u8,
 ) ![]u8 {
-    var bytes = std.ArrayList(u8).init(allocator);
-    defer bytes.deinit();
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(allocator);
 
     var iter = CodePointIterator{ .bytes = str };
     var buf: [4]u8 = undefined;
 
     while (iter.next()) |cp| {
         const len = try unicode.utf8Encode(self.toUpper(cp.code), &buf);
-        try bytes.appendSlice(buf[0..len]);
+        try bytes.appendSlice(allocator, buf[0..len]);
     }
 
-    return try bytes.toOwnedSlice();
+    return try bytes.toOwnedSlice(allocator);
 }
 
 test "toUpperStr" {
@@ -180,18 +178,18 @@ pub fn toLowerStr(
     allocator: mem.Allocator,
     str: []const u8,
 ) ![]u8 {
-    var bytes = std.ArrayList(u8).init(allocator);
-    defer bytes.deinit();
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(allocator);
 
     var iter = CodePointIterator{ .bytes = str };
     var buf: [4]u8 = undefined;
 
     while (iter.next()) |cp| {
         const len = try unicode.utf8Encode(self.toLower(cp.code), &buf);
-        try bytes.appendSlice(buf[0..len]);
+        try bytes.appendSlice(allocator, buf[0..len]);
     }
 
-    return try bytes.toOwnedSlice();
+    return try bytes.toOwnedSlice(allocator);
 }
 
 test "toLowerStr" {

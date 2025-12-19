@@ -8,17 +8,14 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Process DerivedCoreProperties.txt
-    var props_file = try std.fs.cwd().openFile("data/unicode/DerivedCoreProperties.txt", .{});
-    defer props_file.close();
-    var props_buf = std.io.bufferedReader(props_file.reader());
-    const props_reader = props_buf.reader();
+    const props_data = try std.fs.cwd().readFileAlloc("data/unicode/DerivedCoreProperties.txt", allocator, .unlimited);
+    defer allocator.free(props_data);
+    var props_lines = std.mem.splitScalar(u8, props_data, '\n');
 
     var props_map = std.AutoHashMap(u21, void).init(allocator);
     defer props_map.deinit();
 
-    var line_buf: [4096]u8 = undefined;
-
-    props_lines: while (try props_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+    props_loop: while (props_lines.next()) |line| {
         if (line.len == 0 or line[0] == '#') continue;
 
         const no_comment = if (std.mem.indexOfScalar(u8, line, '#')) |octo| line[0..octo] else line;
@@ -43,7 +40,7 @@ pub fn main() !void {
                 },
                 1 => {
                     // Core property
-                    if (!mem.eql(u8, field, "Changes_When_Casefolded")) continue :props_lines;
+                    if (!mem.eql(u8, field, "Changes_When_Casefolded")) continue :props_loop;
                     for (current_code[0]..current_code[1] + 1) |cp| try props_map.put(@intCast(cp), {});
                 },
                 else => {},
@@ -55,12 +52,11 @@ pub fn main() !void {
     defer codepoint_mapping.deinit();
 
     // Process CaseFolding.txt
-    var cp_file = try std.fs.cwd().openFile("data/unicode/CaseFolding.txt", .{});
-    defer cp_file.close();
-    var cp_buf = std.io.bufferedReader(cp_file.reader());
-    const cp_reader = cp_buf.reader();
+    const cp_data = try std.fs.cwd().readFileAlloc("data/unicode/CaseFolding.txt", allocator, .unlimited);
+    defer allocator.free(cp_data);
+    var cp_lines = std.mem.splitScalar(u8, cp_data, '\n');
 
-    while (try cp_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+    while (cp_lines.next()) |line| {
         if (line.len == 0 or line[0] == '#') continue;
 
         var field_it = std.mem.splitScalar(u8, line, ';');
@@ -83,15 +79,15 @@ pub fn main() !void {
         try codepoint_mapping.putNoClobber(codepoint, mapping_buf);
     }
 
-    var changes_when_casefolded_exceptions = std.ArrayList(u21).init(allocator);
-    defer changes_when_casefolded_exceptions.deinit();
+    var changes_when_casefolded_exceptions: std.ArrayList(u21) = .empty;
+    defer changes_when_casefolded_exceptions.deinit(allocator);
 
     {
         // Codepoints with a case fold mapping can be missing the Changes_When_Casefolded property,
         // but not vice versa.
         for (codepoint_mapping.keys()) |codepoint| {
             if (props_map.get(codepoint) == null) {
-                try changes_when_casefolded_exceptions.append(codepoint);
+                try changes_when_casefolded_exceptions.append(allocator, codepoint);
             }
         }
     }
@@ -221,32 +217,37 @@ pub fn main() !void {
         _ = args_iter.skip();
         const output_path = args_iter.next() orelse @panic("No output file arg!");
 
-        const compressor = std.compress.flate.deflate.compressor;
+        const flate = std.compress.flate;
         var out_file = try std.fs.cwd().createFile(output_path, .{});
         defer out_file.close();
-        var out_comp = try compressor(.raw, out_file.writer(), .{ .level = .best });
-        const writer = out_comp.writer();
+
+        var file_buf: [4096]u8 = undefined;
+        var file_writer = out_file.writer(&file_buf);
+
+        var deflate_buf: [flate.max_window_len]u8 = undefined;
+        var compress = try flate.Compress.init(&file_writer.interface, &deflate_buf, .raw, .best);
 
         const endian = builtin.cpu.arch.endian();
         // Table metadata.
-        try writer.writeInt(u24, @intCast(codepoint_cutoff), endian);
-        try writer.writeInt(u24, @intCast(multiple_codepoint_start), endian);
+        try compress.writer.writeInt(u24, @intCast(codepoint_cutoff), endian);
+        try compress.writer.writeInt(u24, @intCast(multiple_codepoint_start), endian);
         // Stage 1
-        try writer.writeInt(u16, @intCast(meaningful_stage1.len), endian);
-        try writer.writeAll(meaningful_stage1);
+        try compress.writer.writeInt(u16, @intCast(meaningful_stage1.len), endian);
+        try compress.writer.writeAll(meaningful_stage1);
         // Stage 2
-        try writer.writeInt(u16, @intCast(stage2.len), endian);
-        try writer.writeAll(stage2);
+        try compress.writer.writeInt(u16, @intCast(stage2.len), endian);
+        try compress.writer.writeAll(stage2);
         // Stage 3
-        try writer.writeInt(u16, @intCast(stage3.len), endian);
-        for (stage3) |offset| try writer.writeInt(i24, offset, endian);
+        try compress.writer.writeInt(u16, @intCast(stage3.len), endian);
+        for (stage3) |offset| try compress.writer.writeInt(i24, offset, endian);
         // Changes when case folded
         // Min and max
-        try writer.writeInt(u24, std.mem.min(u21, changes_when_casefolded_exceptions.items), endian);
-        try writer.writeInt(u24, std.mem.max(u21, changes_when_casefolded_exceptions.items), endian);
-        try writer.writeInt(u16, @intCast(changes_when_casefolded_exceptions.items.len), endian);
-        for (changes_when_casefolded_exceptions.items) |cp| try writer.writeInt(u24, cp, endian);
+        try compress.writer.writeInt(u24, std.mem.min(u21, changes_when_casefolded_exceptions.items), endian);
+        try compress.writer.writeInt(u24, std.mem.max(u21, changes_when_casefolded_exceptions.items), endian);
+        try compress.writer.writeInt(u16, @intCast(changes_when_casefolded_exceptions.items.len), endian);
+        for (changes_when_casefolded_exceptions.items) |cp| try compress.writer.writeInt(u24, cp, endian);
 
-        try out_comp.flush();
+        try compress.writer.flush();
+        try file_writer.interface.flush();
     }
 }

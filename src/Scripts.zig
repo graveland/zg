@@ -196,28 +196,27 @@ pub fn setup(scripts: *Scripts, allocator: Allocator) Allocator.Error!void {
 }
 
 inline fn setupInner(scripts: *Scripts, allocator: mem.Allocator) !void {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("scripts");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var input_reader: std.Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var decompress = compress.flate.Decompress.init(&input_reader, .raw, &decomp_buffer);
 
     const endian = builtin.cpu.arch.endian();
 
-    const s1_len: u16 = try reader.readInt(u16, endian);
+    const s1_len: u16 = try decompress.reader.takeInt(u16, endian);
     scripts.s1 = try allocator.alloc(u16, s1_len);
     errdefer allocator.free(scripts.s1);
-    for (0..s1_len) |i| scripts.s1[i] = try reader.readInt(u16, endian);
+    for (0..s1_len) |i| scripts.s1[i] = try decompress.reader.takeInt(u16, endian);
 
-    const s2_len: u16 = try reader.readInt(u16, endian);
+    const s2_len: u16 = try decompress.reader.takeInt(u16, endian);
     scripts.s2 = try allocator.alloc(u8, s2_len);
     errdefer allocator.free(scripts.s2);
-    _ = try reader.readAll(scripts.s2);
+    try decompress.reader.readSliceAll(scripts.s2);
 
-    const s3_len: u16 = try reader.readInt(u8, endian);
+    const s3_len: u16 = try decompress.reader.takeInt(u8, endian);
     scripts.s3 = try allocator.alloc(u8, s3_len);
     errdefer allocator.free(scripts.s3);
-    _ = try reader.readAll(scripts.s3);
+    try decompress.reader.readSliceAll(scripts.s3);
 }
 
 pub fn deinit(self: *const Scripts, allocator: mem.Allocator) void {

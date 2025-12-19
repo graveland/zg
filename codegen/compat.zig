@@ -7,26 +7,27 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     // Process UnicodeData.txt
-    var in_file = try std.fs.cwd().openFile("data/unicode/UnicodeData.txt", .{});
-    defer in_file.close();
-    var in_buf = std.io.bufferedReader(in_file.reader());
-    const in_reader = in_buf.reader();
+    const in_data = try std.fs.cwd().readFileAlloc("data/unicode/UnicodeData.txt", allocator, .unlimited);
+    var in_lines = std.mem.splitScalar(u8, in_data, '\n');
 
     var args_iter = try std.process.argsWithAllocator(allocator);
     defer args_iter.deinit();
     _ = args_iter.skip();
     const output_path = args_iter.next() orelse @panic("No output file arg!");
 
-    const compressor = std.compress.flate.deflate.compressor;
+    const flate = std.compress.flate;
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
-    var out_comp = try compressor(.raw, out_file.writer(), .{ .level = .best });
-    const writer = out_comp.writer();
+
+    var file_buf: [4096]u8 = undefined;
+    var file_writer = out_file.writer(&file_buf);
+
+    var deflate_buf: [flate.max_window_len]u8 = undefined;
+    var compress = try flate.Compress.init(&file_writer.interface, &deflate_buf, .raw, .best);
 
     const endian = builtin.cpu.arch.endian();
-    var line_buf: [4096]u8 = undefined;
 
-    lines: while (try in_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+    lines: while (in_lines.next()) |line| {
         if (line.len == 0) continue;
 
         var field_iter = std.mem.splitScalar(u8, line, ';');
@@ -55,10 +56,11 @@ pub fn main() !void {
             }
         }
 
-        try writer.writeInt(u8, @intCast(len), endian);
-        for (cps[0..len]) |cp| try writer.writeInt(u24, cp, endian);
+        try compress.writer.writeInt(u8, @intCast(len), endian);
+        for (cps[0..len]) |cp| try compress.writer.writeInt(u24, cp, endian);
     }
 
-    try writer.writeInt(u16, 0, endian);
-    try out_comp.flush();
+    try compress.writer.writeInt(u16, 0, endian);
+    try compress.writer.flush();
+    try file_writer.interface.flush();
 }

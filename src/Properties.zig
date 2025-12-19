@@ -25,56 +25,53 @@ pub fn setup(props: *Properties, allocator: Allocator) Allocator.Error!void {
 }
 
 inline fn setupInner(props: *Properties, allocator: Allocator) !void {
-    const decompressor = compress.flate.inflate.decompressor;
     const endian = builtin.cpu.arch.endian();
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
 
     // Process DerivedCoreProperties.txt
     const core_bytes = @embedFile("core_props");
-    var core_fbs = std.io.fixedBufferStream(core_bytes);
-    var core_decomp = decompressor(.raw, core_fbs.reader());
-    var core_reader = core_decomp.reader();
+    var core_input: std.Io.Reader = .fixed(core_bytes);
+    var core_decomp = compress.flate.Decompress.init(&core_input, .raw, &decomp_buffer);
 
-    const core_stage_1_len: u16 = try core_reader.readInt(u16, endian);
+    const core_stage_1_len: u16 = try core_decomp.reader.takeInt(u16, endian);
     props.core_s1 = try allocator.alloc(u16, core_stage_1_len);
     errdefer allocator.free(props.core_s1);
-    for (0..core_stage_1_len) |i| props.core_s1[i] = try core_reader.readInt(u16, endian);
+    for (0..core_stage_1_len) |i| props.core_s1[i] = try core_decomp.reader.takeInt(u16, endian);
 
-    const core_stage_2_len: u16 = try core_reader.readInt(u16, endian);
+    const core_stage_2_len: u16 = try core_decomp.reader.takeInt(u16, endian);
     props.core_s2 = try allocator.alloc(u8, core_stage_2_len);
     errdefer allocator.free(props.core_s2);
-    _ = try core_reader.readAll(props.core_s2);
+    try core_decomp.reader.readSliceAll(props.core_s2);
 
     // Process PropList.txt
     const props_bytes = @embedFile("props");
-    var props_fbs = std.io.fixedBufferStream(props_bytes);
-    var props_decomp = decompressor(.raw, props_fbs.reader());
-    var props_reader = props_decomp.reader();
+    var props_input: std.Io.Reader = .fixed(props_bytes);
+    var props_decomp = compress.flate.Decompress.init(&props_input, .raw, &decomp_buffer);
 
-    const stage_1_len: u16 = try props_reader.readInt(u16, endian);
+    const stage_1_len: u16 = try props_decomp.reader.takeInt(u16, endian);
     props.props_s1 = try allocator.alloc(u16, stage_1_len);
     errdefer allocator.free(props.props_s1);
-    for (0..stage_1_len) |i| props.props_s1[i] = try props_reader.readInt(u16, endian);
+    for (0..stage_1_len) |i| props.props_s1[i] = try props_decomp.reader.takeInt(u16, endian);
 
-    const stage_2_len: u16 = try props_reader.readInt(u16, endian);
+    const stage_2_len: u16 = try props_decomp.reader.takeInt(u16, endian);
     props.props_s2 = try allocator.alloc(u8, stage_2_len);
     errdefer allocator.free(props.props_s2);
-    _ = try props_reader.readAll(props.props_s2);
+    try props_decomp.reader.readSliceAll(props.props_s2);
 
     // Process DerivedNumericType.txt
     const num_bytes = @embedFile("numeric");
-    var num_fbs = std.io.fixedBufferStream(num_bytes);
-    var num_decomp = decompressor(.raw, num_fbs.reader());
-    var num_reader = num_decomp.reader();
+    var num_input: std.Io.Reader = .fixed(num_bytes);
+    var num_decomp = compress.flate.Decompress.init(&num_input, .raw, &decomp_buffer);
 
-    const num_stage_1_len: u16 = try num_reader.readInt(u16, endian);
+    const num_stage_1_len: u16 = try num_decomp.reader.takeInt(u16, endian);
     props.num_s1 = try allocator.alloc(u16, num_stage_1_len);
     errdefer allocator.free(props.num_s1);
-    for (0..num_stage_1_len) |i| props.num_s1[i] = try num_reader.readInt(u16, endian);
+    for (0..num_stage_1_len) |i| props.num_s1[i] = try num_decomp.reader.takeInt(u16, endian);
 
-    const num_stage_2_len: u16 = try num_reader.readInt(u16, endian);
+    const num_stage_2_len: u16 = try num_decomp.reader.takeInt(u16, endian);
     props.num_s2 = try allocator.alloc(u8, num_stage_2_len);
     errdefer allocator.free(props.num_s2);
-    _ = try num_reader.readAll(props.num_s2);
+    try num_decomp.reader.readSliceAll(props.num_s2);
 }
 
 pub fn deinit(self: *const Properties, allocator: Allocator) void {

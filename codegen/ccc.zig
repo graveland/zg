@@ -29,15 +29,11 @@ pub fn main() !void {
     var flat_map = std.AutoHashMap(u21, u8).init(allocator);
     defer flat_map.deinit();
 
-    var line_buf: [4096]u8 = undefined;
-
     // Process DerivedCombiningClass.txt
-    var cc_file = try std.fs.cwd().openFile("data/unicode/extracted/DerivedCombiningClass.txt", .{});
-    defer cc_file.close();
-    var cc_buf = std.io.bufferedReader(cc_file.reader());
-    const cc_reader = cc_buf.reader();
+    const cc_data = try std.fs.cwd().readFileAlloc("data/unicode/extracted/DerivedCombiningClass.txt", allocator, .unlimited);
+    var cc_lines = std.mem.splitScalar(u8, cc_data, '\n');
 
-    while (try cc_reader.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+    while (cc_lines.next()) |line| {
         if (line.len == 0 or line[0] == '#') continue;
         const no_comment = if (std.mem.indexOfScalar(u8, line, '#')) |octo| line[0..octo] else line;
 
@@ -73,11 +69,11 @@ pub fn main() !void {
     var blocks_map = BlockMap.init(allocator);
     defer blocks_map.deinit();
 
-    var stage1 = std.ArrayList(u16).init(allocator);
-    defer stage1.deinit();
+    var stage1: std.ArrayList(u16) = .empty;
+    defer stage1.deinit(allocator);
 
-    var stage2 = std.ArrayList(u8).init(allocator);
-    defer stage2.deinit();
+    var stage2: std.ArrayList(u8) = .empty;
+    defer stage2.deinit(allocator);
 
     var block: Block = [_]u8{0} ** block_size;
     var block_len: u16 = 0;
@@ -95,10 +91,10 @@ pub fn main() !void {
         const gop = try blocks_map.getOrPut(block);
         if (!gop.found_existing) {
             gop.value_ptr.* = @intCast(stage2.items.len);
-            try stage2.appendSlice(&block);
+            try stage2.appendSlice(allocator, &block);
         }
 
-        try stage1.append(gop.value_ptr.*);
+        try stage1.append(allocator, gop.value_ptr.*);
         block_len = 0;
     }
 
@@ -107,18 +103,23 @@ pub fn main() !void {
     _ = args_iter.skip();
     const output_path = args_iter.next() orelse @panic("No output file arg!");
 
-    const compressor = std.compress.flate.deflate.compressor;
+    const flate = std.compress.flate;
     var out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
-    var out_comp = try compressor(.raw, out_file.writer(), .{ .level = .best });
-    const writer = out_comp.writer();
+
+    var file_buf: [4096]u8 = undefined;
+    var file_writer = out_file.writer(&file_buf);
+
+    var deflate_buf: [flate.max_window_len]u8 = undefined;
+    var compress = try flate.Compress.init(&file_writer.interface, &deflate_buf, .raw, .best);
 
     const endian = builtin.cpu.arch.endian();
-    try writer.writeInt(u16, @intCast(stage1.items.len), endian);
-    for (stage1.items) |i| try writer.writeInt(u16, i, endian);
+    try compress.writer.writeInt(u16, @intCast(stage1.items.len), endian);
+    for (stage1.items) |item| try compress.writer.writeInt(u16, item, endian);
 
-    try writer.writeInt(u16, @intCast(stage2.items.len), endian);
-    try writer.writeAll(stage2.items);
+    try compress.writer.writeInt(u16, @intCast(stage2.items.len), endian);
+    try compress.writer.writeAll(stage2.items);
 
-    try out_comp.flush();
+    try compress.writer.flush();
+    try file_writer.interface.flush();
 }

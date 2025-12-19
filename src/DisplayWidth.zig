@@ -39,23 +39,27 @@ pub fn setupWithGraphemes(dw: *DisplayWidth, allocator: Allocator, graphemes: Gr
 
 // Sets up the DisplayWidthData, leaving the GraphemeData undefined.
 pub fn setup(dw: *DisplayWidth, allocator: Allocator) Allocator.Error!void {
-    const decompressor = compress.flate.inflate.decompressor;
     const in_bytes = @embedFile("dwp");
-    var in_fbs = std.io.fixedBufferStream(in_bytes);
-    var in_decomp = decompressor(.raw, in_fbs.reader());
-    var reader = in_decomp.reader();
+    var in_reader: std.Io.Reader = .fixed(in_bytes);
+    var decomp_buffer: [compress.flate.max_window_len]u8 = undefined;
+    var in_decomp = compress.flate.Decompress.init(&in_reader, .raw, &decomp_buffer);
+    const reader = &in_decomp.reader;
 
     const endian = builtin.cpu.arch.endian();
 
-    const stage_1_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const stage_1_len: u16 = std.mem.readInt(u16, (reader.takeArray(2) catch unreachable), endian);
     dw.s1 = try allocator.alloc(u16, stage_1_len);
     errdefer allocator.free(dw.s1);
-    for (0..stage_1_len) |i| dw.s1[i] = reader.readInt(u16, endian) catch unreachable;
+    for (0..stage_1_len) |i| {
+        dw.s1[i] = std.mem.readInt(u16, (reader.takeArray(2) catch unreachable), endian);
+    }
 
-    const stage_2_len: u16 = reader.readInt(u16, endian) catch unreachable;
+    const stage_2_len: u16 = std.mem.readInt(u16, (reader.takeArray(2) catch unreachable), endian);
     dw.s2 = try allocator.alloc(i4, stage_2_len);
     errdefer allocator.free(dw.s2);
-    for (0..stage_2_len) |i| dw.s2[i] = @intCast(reader.readInt(i8, endian) catch unreachable);
+    for (0..stage_2_len) |i| {
+        dw.s2[i] = @intCast(std.mem.readInt(i8, (reader.takeArray(1) catch unreachable), endian));
+    }
 }
 
 pub fn deinit(dw: *const DisplayWidth, allocator: Allocator) void {
@@ -400,8 +404,8 @@ pub fn wrap(
     columns: usize,
     threshold: usize,
 ) ![]u8 {
-    var result = ArrayList(u8).init(allocator);
-    defer result.deinit();
+    var result: ArrayList(u8) = .empty;
+    defer result.deinit(allocator);
 
     var line_iter = mem.tokenizeAny(u8, str, "\r\n");
     var line_width: usize = 0;
@@ -410,12 +414,12 @@ pub fn wrap(
         var word_iter = mem.tokenizeScalar(u8, line, ' ');
 
         while (word_iter.next()) |word| {
-            try result.appendSlice(word);
-            try result.append(' ');
+            try result.appendSlice(allocator, word);
+            try result.append(allocator, ' ');
             line_width += dw.strWidth(word) + 1;
 
             if (line_width > columns or columns - line_width <= threshold) {
-                try result.append('\n');
+                try result.append(allocator, '\n');
                 line_width = 0;
             }
         }
@@ -425,7 +429,7 @@ pub fn wrap(
     _ = result.pop();
     _ = result.pop();
 
-    return try result.toOwnedSlice();
+    return try result.toOwnedSlice(allocator);
 }
 
 test "wrap" {
