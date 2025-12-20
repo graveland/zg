@@ -39,8 +39,8 @@ pub fn createModules(
 
     // Helper to create path relative to base_path
     const path = struct {
-        fn p(bp: std.Build.LazyPath, sub: []const u8) std.Build.LazyPath {
-            return bp.path(b, sub);
+        fn p(builder: *std.Build, bp: std.Build.LazyPath, sub: []const u8) std.Build.LazyPath {
+            return bp.path(builder, sub);
         }
     }.p;
 
@@ -55,7 +55,7 @@ pub fn createModules(
 
     // 'magic' module
     const magic = b.createModule(.{
-        .root_source_file = path(base_path, "src/magic_numbers.zig"),
+        .root_source_file = path(b, base_path, "src/magic_numbers.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -64,7 +64,7 @@ pub fn createModules(
     const gbp_gen_exe = b.addExecutable(.{
         .name = "gbp",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/gbp.zig"),
+            .root_source_file = path(b, base_path, "codegen/gbp.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -76,7 +76,7 @@ pub fn createModules(
     const wbp_gen_exe = b.addExecutable(.{
         .name = "wbp",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/wbp.zig"),
+            .root_source_file = path(b, base_path, "codegen/wbp.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -88,7 +88,7 @@ pub fn createModules(
     const dwp_gen_exe = b.addExecutable(.{
         .name = "dwp",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/dwp.zig"),
+            .root_source_file = path(b, base_path, "codegen/dwp.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -101,7 +101,7 @@ pub fn createModules(
     const canon_gen_exe = b.addExecutable(.{
         .name = "canon",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/canon.zig"),
+            .root_source_file = path(b, base_path, "codegen/canon.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -113,7 +113,7 @@ pub fn createModules(
     const compat_gen_exe = b.addExecutable(.{
         .name = "compat",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/compat.zig"),
+            .root_source_file = path(b, base_path, "codegen/compat.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -125,7 +125,7 @@ pub fn createModules(
     const hangul_gen_exe = b.addExecutable(.{
         .name = "hangul",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/hangul.zig"),
+            .root_source_file = path(b, base_path, "codegen/hangul.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -137,7 +137,7 @@ pub fn createModules(
     const normp_gen_exe = b.addExecutable(.{
         .name = "normp",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/normp.zig"),
+            .root_source_file = path(b, base_path, "codegen/normp.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -149,7 +149,7 @@ pub fn createModules(
     const ccc_gen_exe = b.addExecutable(.{
         .name = "ccc",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/ccc.zig"),
+            .root_source_file = path(b, base_path, "codegen/ccc.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -161,7 +161,7 @@ pub fn createModules(
     const gencat_gen_exe = b.addExecutable(.{
         .name = "gencat",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/gencat.zig"),
+            .root_source_file = path(b, base_path, "codegen/gencat.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -173,7 +173,7 @@ pub fn createModules(
     const fold_gen_exe = b.addExecutable(.{
         .name = "fold",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/fold.zig"),
+            .root_source_file = path(b, base_path, "codegen/fold.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -185,7 +185,7 @@ pub fn createModules(
     const num_gen_exe = b.addExecutable(.{
         .name = "numeric",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/numeric.zig"),
+            .root_source_file = path(b, base_path, "codegen/numeric.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -197,7 +197,7 @@ pub fn createModules(
     const case_prop_gen_exe = b.addExecutable(.{
         .name = "case_prop",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/case_prop.zig"),
+            .root_source_file = path(b, base_path, "codegen/case_prop.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -209,7 +209,7 @@ pub fn createModules(
     const upper_gen_exe = b.addExecutable(.{
         .name = "upper",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/upper.zig"),
+            .root_source_file = path(b, base_path, "codegen/upper.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -221,7 +221,7 @@ pub fn createModules(
     const lower_gen_exe = b.addExecutable(.{
         .name = "lower",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/lower.zig"),
+            .root_source_file = path(b, base_path, "codegen/lower.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -233,7 +233,7 @@ pub fn createModules(
     const scripts_gen_exe = b.addExecutable(.{
         .name = "scripts",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/scripts.zig"),
+            .root_source_file = path(b, base_path, "codegen/scripts.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -245,7 +245,7 @@ pub fn createModules(
     const core_gen_exe = b.addExecutable(.{
         .name = "core",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/core_props.zig"),
+            .root_source_file = path(b, base_path, "codegen/core_props.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -257,7 +257,7 @@ pub fn createModules(
     const props_gen_exe = b.addExecutable(.{
         .name = "props",
         .root_module = b.createModule(.{
-            .root_source_file = path(base_path, "codegen/props.zig"),
+            .root_source_file = path(b, base_path, "codegen/props.zig"),
             .target = b.graph.host,
             .optimize = .Debug,
         }),
@@ -270,7 +270,7 @@ pub fn createModules(
 
     // Code points
     const code_point = b.addModule("code_point", .{
-        .root_source_file = path(base_path, "src/code_point.zig"),
+        .root_source_file = path(b, base_path, "src/code_point.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -279,14 +279,14 @@ pub fn createModules(
 
     // ASCII utilities
     const ascii = b.addModule("ascii", .{
-        .root_source_file = path(base_path, "src/ascii.zig"),
+        .root_source_file = path(b, base_path, "src/ascii.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     // Graphemes
     const graphemes = b.addModule("Graphemes", .{
-        .root_source_file = path(base_path, "src/Graphemes.zig"),
+        .root_source_file = path(b, base_path, "src/Graphemes.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -296,7 +296,7 @@ pub fn createModules(
 
     // Word Breaking
     const words = b.addModule("Words", .{
-        .root_source_file = path(base_path, "src/Words.zig"),
+        .root_source_file = path(b, base_path, "src/Words.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -305,7 +305,7 @@ pub fn createModules(
 
     // Fixed pitch font display width
     const display_width = b.addModule("DisplayWidth", .{
-        .root_source_file = path(base_path, "src/DisplayWidth.zig"),
+        .root_source_file = path(b, base_path, "src/DisplayWidth.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -317,14 +317,14 @@ pub fn createModules(
 
     // Normalization data modules
     const ccc_data = b.createModule(.{
-        .root_source_file = path(base_path, "src/CombiningData.zig"),
+        .root_source_file = path(b, base_path, "src/CombiningData.zig"),
         .target = target,
         .optimize = optimize,
     });
     ccc_data.addAnonymousImport("ccc", .{ .root_source_file = ccc_gen_out });
 
     const canon_data = b.createModule(.{
-        .root_source_file = path(base_path, "src/CanonData.zig"),
+        .root_source_file = path(b, base_path, "src/CanonData.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -332,7 +332,7 @@ pub fn createModules(
     canon_data.addImport("magic", magic);
 
     const compat_data = b.createModule(.{
-        .root_source_file = path(base_path, "src/CompatData.zig"),
+        .root_source_file = path(b, base_path, "src/CompatData.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -340,14 +340,14 @@ pub fn createModules(
     compat_data.addImport("magic", magic);
 
     const hangul_data = b.createModule(.{
-        .root_source_file = path(base_path, "src/HangulData.zig"),
+        .root_source_file = path(b, base_path, "src/HangulData.zig"),
         .target = target,
         .optimize = optimize,
     });
     hangul_data.addAnonymousImport("hangul", .{ .root_source_file = hangul_gen_out });
 
     const normp_data = b.createModule(.{
-        .root_source_file = path(base_path, "src/NormPropsData.zig"),
+        .root_source_file = path(b, base_path, "src/NormPropsData.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -355,7 +355,7 @@ pub fn createModules(
 
     // Normalization
     const norm = b.addModule("Normalize", .{
-        .root_source_file = path(base_path, "src/Normalize.zig"),
+        .root_source_file = path(b, base_path, "src/Normalize.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -369,7 +369,7 @@ pub fn createModules(
 
     // General Category
     const gencat = b.addModule("GeneralCategories", .{
-        .root_source_file = path(base_path, "src/GeneralCategories.zig"),
+        .root_source_file = path(b, base_path, "src/GeneralCategories.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -377,7 +377,7 @@ pub fn createModules(
 
     // Case folding
     const case_fold = b.addModule("CaseFolding", .{
-        .root_source_file = path(base_path, "src/CaseFolding.zig"),
+        .root_source_file = path(b, base_path, "src/CaseFolding.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -387,7 +387,7 @@ pub fn createModules(
 
     // Letter case
     const letter_case = b.addModule("LetterCasing", .{
-        .root_source_file = path(base_path, "src/LetterCasing.zig"),
+        .root_source_file = path(b, base_path, "src/LetterCasing.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -398,7 +398,7 @@ pub fn createModules(
 
     // Scripts
     const scripts = b.addModule("Scripts", .{
-        .root_source_file = path(base_path, "src/Scripts.zig"),
+        .root_source_file = path(b, base_path, "src/Scripts.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -406,7 +406,7 @@ pub fn createModules(
 
     // Properties
     const properties = b.addModule("Properties", .{
-        .root_source_file = path(base_path, "src/Properties.zig"),
+        .root_source_file = path(b, base_path, "src/Properties.zig"),
         .target = target,
         .optimize = optimize,
     });
