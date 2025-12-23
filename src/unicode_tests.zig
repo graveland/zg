@@ -128,7 +128,7 @@ test "Segmentation GraphemeIterator" {
 
     while (line_iter.next()) |raw| {
         // Clean up.
-        var line = std.mem.trimLeft(u8, raw, "÷ ");
+        var line = std.mem.trimStart(u8, raw, "÷ ");
         if (std.mem.indexOf(u8, line, " ÷\t")) |final| {
             line = line[0..final];
         }
@@ -267,7 +267,7 @@ test "Segmentation Word Iterator" {
 
     while (line_iter.next()) |raw| {
         // Clean up.
-        var line = std.mem.trimLeft(u8, raw, "÷ ");
+        var line = std.mem.trimStart(u8, raw, "÷ ");
         if (std.mem.indexOf(u8, line, " ÷\t")) |final| {
             line = line[0..final];
         }
@@ -492,7 +492,7 @@ const LineIterator = struct {
             }
 
             // Skip empty lines and lines starting with @ (but don't trim - test code handles that)
-            const trimmed = std.mem.trimRight(u8, line, " \t\r");
+            const trimmed = std.mem.trimEnd(u8, line, " \t\r");
             if (trimmed.len == 0) continue;
             if (trimmed[0] == '@') continue;
 
